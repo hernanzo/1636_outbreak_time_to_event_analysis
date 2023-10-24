@@ -1,0 +1,260 @@
+---
+title: "Death on two Legs: London during the 1636 outbreak"
+author: Hernán Adasme
+date: 2023-06-07
+format: 
+  html:
+    html:
+    df-print: paged
+    code-fold: true
+    embed-resources: true
+    code-overflow: wrap
+    toc: true
+    number-sections: true
+    css: styles.css
+execute:
+  enabled: True
+  warning: False
+  echo: True
+reference-location: margin
+fig-cap-location: bottom
+---
+
+# Introduction
+
+During the seventeenth century, England experienced multiple devastating plague outbreaks. Although milder than the 1603 and 1624 plague crisis, London's outbreak of 1636 claimed the lives of approximately 10,400 Londoners[^1]. During this epidemic, Londoners had to endure rigorous quarantines and regulations, which was a relatively new policy in England that had emerged in the late sixteenth century.
+
+[^1]: Newman, Kira L. S. "Shutt Up: Bubonic Plague and Quarantine in Early Modern England." Journal of social history 45.3 (2012): 809--834. Web.
+
+In this blog post I explore the 1636 outbreak by examining data collected from the bills of mortality through the death by numbers project. The analysis starts in 1636's week 20, when three initial cases were reported in St Botolph Aldgate, St Botolph Bishopsgate, and St Giles Cripplegate, and extends until week 45, when only 19 out of the total 124 parishes remained unaffected by the plague. Evidence shows that the 97 parishes within the walls of London, experienced a much slower spread of the disease, while the parishes outside the Walls and in Middlesex and Surrey, suffered a much rapid spread of the plague. The analysis will be accompanied by a spatial representation of the advancement of the plague. 
+
+For the analysis, I will employ a technique known as survival analysis to examine how the plague progressed in each parish. This approach allows us to gain insights into key aspects, including the speed of infection, the order in which parishes were affected, the duration of the outbreak, and how factors like population density impacted the progression of the outbreak during this period.
+
+```{r}
+library(sf)
+library(sp)
+library(ggplot2)
+library(dplyr)
+library(leaflet)
+library(plotly)
+library(sfheaders)
+library(survival)
+library(survminer)
+```
+
+```{r}
+install.packages("SpatialEpi")
+install.packages("SpatialSurvival")
+install.packages("spatsurv")
+```
+
+```{r}
+library(survival)
+library(SpatialEpi)
+library(spatsurv)
+```
+
+## Loading Data:
+
+The data frame named 'parishes' contains the parishes as they were in 1622.
+
+```{r}
+parishes <- st_read("/Users/hernanadasme/Projects/bom/BOM_1636/parish-shapefiles/WithinTheBills1622/WithinTheBills1622.shp")
+```
+
+checking data
+
+```{r}
+parishes_df <- as.data.frame(parishes)
+parishes_df
+```
+
+Loading the data. The dataframe 'survival_1636' contains the time to event analysis for 130 parishes.
+
+```{r}
+time_to_event_data <- read.csv("/Users/hernanadasme/Projects/bom/datasets_survival/all_pars_1636.csv")
+survival_1636 <- read.csv("/Users/hernanadasme/Projects/bom/datasets_survival/all_pars_1636.csv")
+survival_1636
+```
+
+```{r}
+unique_values <- distinct(survival_1636, OMEKA_PAR)
+unique_values
+```
+
+```{r}
+surv_time <- survival_1636$duration 
+event_status <- survival_1636$event 
+group_var <- survival_1636$Category
+
+surv_obj <- Surv(surv_time, event_status)
+
+#log-rank test 
+result <- survdiff(surv_obj ~group_var)
+
+print(result)
+```
+
+### The Survival Plot
+
+The survival or time-to-event plot shows how long it takes for some event to occur in different samples of parishes. The x axis shows the time, from week 0 of the year to week 45. The y axis shows the overall percent of parishes who have not experienced to that point in time in the x axis. In the plot, at time 0, no parish had experienced the plague (actually this is known as a left censorship, because in reality, we don't don't have data before week 20). The lines show the sample of parishes, which I created by following the segmentation on the bills: the 97 parishes within the walls (red), the 16 parishes without the walls(green), nine out parishes in Middlesex and surry (blue), and the 7 parishes in the City and Liberties (purple). The lines have the shape of a staircase descending down; this drop reflects the parishes in the data sample experiencing the event, which is at least having one case of the plague.
+
+The curves have been created with the Log-Rank test, which analyze the survival probability of different sub populations. Here I am rejecting the null hypothesis, that the survival curves of the subgroups of parishes are equal. They are not equal, and the difference is significant; below the p-value.
+
+```{r}
+  #| label: fig-survival-cases
+  #| fig-cap: "The lines show the sub groups of parishes, following the segmentation on the bills: the 97 parishes within the walls (red), the 16 parishes without the walls(green), nine out parishes in Middlesex and surry (blue), and the 7 parishes in the City and Liberties (purple). The lines have the shape of a staircase descending down; this drop reflects the parishes in the data sample experiencing the event, which is at least having one case of the plague. The 97 parishes within the walls only started to report a significant number of cases after week 33"
+# Fit Kaplan-Meier survival curves for each group
+groups <- unique(survival_1636$Category)
+kmf_2 <- survfit(Surv(duration, event) ~ Category, data = survival_1636)
+
+# Plot Kaplan-Meier curves
+ggsurvplot(kmf_2, data = survival_1636, risk.table = FALSE, pval = TRUE)
+
+# Save the plot with high quality
+ggsave("survival_curve.png", width = 6, height = 4, dpi = 1000)
+
+# Perform Log-Rank test
+#result <- survdiff(Surv(duration, event) ~ Category, data = survival_1636)
+#result
+
+# Print Log-Rank test results
+#print(summary(result))
+```
+
+45
+
+```{r}
+# Perform a left join to combine the data based on a shared parish identifier
+combined_1636 <- left_join(parishes, time_to_event_data, by = "OMEKA_PAR")
+```
+
+```{r}
+combined_1636
+```
+
+```{r}
+combined_df <- as.data.frame(combined_1636)
+```
+
+```{r}
+# Using colnames() function
+column_names <- colnames(combined_df)
+print(column_names)
+```
+
+```{r}
+columns_to_drop <- c("PAR", "CIV_PAR", "DBN_PAR", "CITY_CNTY", "CITY_CNTY", "X", "START_YR")
+
+# Create a new data frame by excluding the columns you want to drop
+outbreak_1636 <- combined_df[, !(names(combined_df) %in% columns_to_drop)]
+outbreak_1636
+```
+
+```{r}
+combined_df
+```
+
+```{r}
+count_result <- combined_1636 %>% count(event)
+
+# Print the result
+print(count_result)
+```
+
+```{r}
+#| label: fig-maping-cases
+#| fig-cap: "Total cases of the plague by 1636's week 45. In the Parishes within the Walls of London, the plague remained with relatively low numbers. Zoom in to see the parishes within the walls of London"
+
+centroids <- st_centroid(combined_1636$geometry)
+
+# Add centroids to the data frame
+combined_1636$centroid_x <- st_coordinates(centroids)[, "X"]
+combined_1636$centroid_y <- st_coordinates(centroids)[, "Y"]
+p_3 <- ggplot(data = combined_1636 , aes(fill = sum), aes(x,y)) +
+  geom_sf(lwd = 0.01, color = "lightgrey")+ 
+  geom_text(aes(x = centroid_x, y = centroid_y, label = OMEKA_PAR),
+            color = "grey", size = 1, show.legend = FALSE, alpha=0)+
+  scale_fill_gradient(low = "aliceblue", high = "darkslateblue", na.value = "white",
+                      breaks = c(0, 100, 200, 300, 400, 500, 600, 700, 800),
+                      labels = scales::comma_format()) +
+  theme_void()
+# Convert ggplot to plotly
+plotly_plot_3 <- ggplotly(p_3)
+
+# Save the plot with high quality
+ggsave("total_deaths.png", width = 6, height = 4, dpi = 1000)
+
+# Display the interactive plot
+plotly_plot_3
+```
+
+```{r}
+#| label: fig-map-total-cases
+#| fig-cap: "Outbreak by Parish. The dark purple color shows the parishes were the plague was reported first. Note that St Botolph Aldgate, St Botolph Bishopsgate, and St Giles Cripplegate, located outside of the walls of London, reported cases by week 20. Zoom in to look how The parishes within the walls of london only reported cases by week 33" 
+
+p_5 <- ggplot(data = combined_1636, aes(fill = duration)) +
+  geom_sf(lwd = 0.05, color = "lightgrey")+
+  geom_text(aes(x = centroid_x, y = centroid_y, label = OMEKA_PAR),
+            color = "grey", size = 1, show.legend = FALSE, alpha=0) + 
+  scale_fill_gradient(low = "darkslateblue", high = "aliceblue", na.value = "aliceblue",
+                      breaks = c(20, 30, 40, 50), 
+                      labels = scales::comma_format()) +
+  theme_void()
+
+# Convert ggplot to plotly
+plotly_plot_5 <- ggplotly(p_5)
+
+# Save the plot with high quality
+ggsave("survival_weeks_big.png", width = 6, height = 4, dpi = 3200)
+
+# Display the interactive plot
+plotly_plot_5
+```
+
+```{r}
+centroids <- st_centroid(combined_1636$geometry)
+
+# Add centroids to the data frame
+combined_1636$centroid_x <- st_coordinates(centroids)[, "X"]
+combined_1636$centroid_y <- st_coordinates(centroids)[, "Y"]
+
+# Create the ggplot object
+p_7 <- ggplot(data = combined_1636, aes(fill = factor(event))) +
+  geom_sf(lwd = 0.1, color = "lightgrey")+
+  geom_text(aes(x = centroid_x, y = centroid_y, label = OMEKA_PAR),
+            color = "grey", size = 1, show.legend = FALSE, alpha=0) + 
+  scale_fill_manual(values = c("0" = "lightgreen", "1" = "darkred"),
+                    na.value = "grey") +
+  theme_void()
+
+# Convert ggplot to plotly
+plotly_plot_7 <- ggplotly(p_7, tooltip = "label")  # Add tooltip argument
+
+# Display the interactive plot
+plotly_plot_7
+```
+
+```{r}
+# Save as CSV
+write.csv(outbreak_1636, "outbreak_1636.csv", row.names = FALSE,  fileEncoding = "UTF-8")
+```
+
+```{r}
+combined_df
+```
+
+```{r}
+# Save DataFrame as CSV
+write.csv(combined_df, "combined_df.csv", row.names = FALSE)
+```
+
+```{r}
+ggplot() +
+  geom_sf(data = combined_1636)+
+  geom_polygon(color="black", size=.5, fill="white")
+```
+
+```{r}
+getwd()
+```

@@ -1,0 +1,165 @@
+---
+title: "Infant Causes of Death: Monarch Bills 1665 - 1669"
+output: html_notebook
+---
+
+```{r}
+#this lines of code install these packages in your RStudio workspace
+install.packages("dplyr")
+install.packages("leaflet")
+install.packages("ggplot2")
+install.packages("ggplot")
+install.packages("plotly")
+```
+
+```{r}
+#this code invoke the same packages in your open Rmarkdown file (which is this file that you are reading now)
+#to plot and visualize your data
+library(sf)
+library(sp)
+library(ggplot2)
+library(dplyr)
+library(leaflet)
+library(plotly)
+library(sfheaders)
+library(survival)
+library(survminer)
+```
+
+### Loading the causes data.
+
+From the Monarch Bills I've created 4 different data frames, one for each of the illnesses that I've extracted so far; infant, chrisoms, stillborne, and abortive. Each data frame contained the parish name, standardized to the Omeka form, and the counts per year starting off from 1665, to 1669. I am going to send you de data sets, so you can load them from your directory.
+
+```{r}
+abortive <- read.csv("/Users/hernanadasme/Projects/bom/abortive_1665_1669.csv")
+stilborne <- read.csv("/Users/hernanadasme/Projects/bom/stilborne_1665_1669.csv")
+infant <- read.csv("/Users/hernanadasme/Projects/bom/infant_1665_1669.csv")
+chrisoms <- read.csv("/Users/hernanadasme/Projects/bom/chrisoms_1665_1669.csv")
+```
+
+check the one of the data frames
+
+```{r}
+head(abortive)
+```
+
+### Loading the parishes polygons
+
+Here I am loading a shapefile. Shapefiles are a collection of files that contain geo referenced data. You only need to pull the file with the .shp extension and it will load all the required files. I will send you this file too, and we can load it into a folder. Here we are using the parishes from 1671; I am only assuming that those would be more accurate for the type of analysis that we want to do.
+
+```{r}
+parishes_1671 <- st_read("//Users/hernanadasme/Projects/bom/parish-shapefiles/WithinTheBills1671/WithinTheBills1671.shp")
+```
+
+### Merging the parishes data with the individual diseases data frames
+
+I standardized the names of the parishes to match them with one of the possible names in the data set that contains the parishes polygons. That explains why the diseases data sets have a column named OMEKA_PAR, which matches with the same column in the 1671 parishes shape file. Having the same column allow us to merge the data frames and create one data frame with the parish name, the cause of death, the counts per year, and the georeferenced data with the polygons. I will perform two types of joins: left join and inner join.
+
+#### Inner join:
+
+An inner join only includes rows that have matching values in both the left and right tables.. In this case, only includes the parishes which contain data from the original abortive data frame.
+
+```{r}
+# Perform a left join to combine the data based on a shared parish identifier. e.
+map_abortive <- inner_join(parishes_1671, abortive, by = "OMEKA_PAR")
+```
+
+check the data
+
+```{r}
+#to better see the data, we can transform the joined table into a data frame view
+map_abortive_df <- as.data.frame(map_abortive)
+map_abortive_df
+```
+
+Mapping the left joined data
+
+```{r}
+centroids <- st_centroid(map_abortive$geometry)
+
+# Add centroids to the data frame
+map_abortive$centroid_x <- st_coordinates(centroids)[, "X"]
+map_abortive$centroid_y <- st_coordinates(centroids)[, "Y"]
+
+plot_av <- ggplot(data = map_abortive , aes(fill = X1669 )) +
+  geom_sf() +
+  geom_text(aes(x = centroid_x, y = centroid_y, label = OMEKA_PAR),
+            color = "grey", size = 1, show.legend = FALSE, alpha=0)+
+  scale_fill_gradient(low = "white", high = "red", na.value = "gray",
+                      breaks = c(0, 100, 200, 300, 400, 500, 600, 700, 800),
+                      labels = scales::comma_format()) +
+  theme_void()
+
+# Convert ggplot to plotly
+plotly_map <- ggplotly(plot_av)
+
+# Display the interactive plot
+plotly_map
+```
+
+#### Left join:
+
+A left join includes all the rows from the left (or first) table and matching rows from the right (or second) table. In this case, includes the parishes which contain data from the original abortive data frame and all the 106 parishes with no data, from the shapefile
+
+```{r}
+leftjoined_abortive <- left_join(parishes_1671, abortive, by = "OMEKA_PAR")
+map_leftjoined_abortive <- as.data.frame(leftjoined_abortive)
+map_leftjoined_abortive
+```
+
+```{r}
+centroids <- st_centroid(leftjoined_abortive$geometry)
+
+# Add centroids to the data frame
+leftjoined_abortive$centroid_x <- st_coordinates(centroids)[, "X"]
+leftjoined_abortive$centroid_y <- st_coordinates(centroids)[, "Y"]
+
+plot_av_all <- ggplot(data = leftjoined_abortive , aes(fill = X1665 )) +
+  geom_sf() +
+  geom_text(aes(x = centroid_x, y = centroid_y, label = OMEKA_PAR),
+            color = "grey", size = 1, show.legend = FALSE, alpha=0)+
+  scale_fill_gradient(low = "white", high = "red", na.value = "gray",
+                      breaks = c(0, 100, 200, 300, 400, 500, 600, 700, 800),
+                      labels = scales::comma_format()) +
+  theme_void()
+
+# Convert ggplot to plotly
+plotly_map_all <- ggplotly(plot_av_all)
+
+# Display the interactive plot
+plotly_map_all
+```
+
+#### Now we do the same with the infants data set
+
+```{r}
+leftjoined_infant <- left_join(parishes_1671, infant, by = "OMEKA_PAR")
+```
+
+```{r}
+map_infants_df <- as.data.frame(leftjoined_infant)
+map_infants_df
+```
+
+```{r}
+centroids <- st_centroid(leftjoined_infant$geometry)
+
+# Add centroids to the data frame
+leftjoined_infant$centroid_x <- st_coordinates(centroids)[, "X"]
+leftjoined_infant$centroid_y <- st_coordinates(centroids)[, "Y"]
+
+plot_inf_all <- ggplot(data = leftjoined_infant, aes(fill = X1669 )) +
+  geom_sf() +
+  geom_text(aes(x = centroid_x, y = centroid_y, label = OMEKA_PAR),
+            color = "grey", size = 1, show.legend = FALSE, alpha=0)+
+  scale_fill_gradient(low = "white", high = "red", na.value = "gray",
+                      breaks = c(0, 100, 200, 300, 400, 500, 600, 700, 800),
+                      labels = scales::comma_format()) +
+  theme_void()
+
+# Convert ggplot to plotly
+plotly_inf_all <- ggplotly(plot_inf_all)
+
+# Display the interactive plot
+plotly_inf_all
+```

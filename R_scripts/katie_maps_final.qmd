@@ -1,0 +1,124 @@
+---
+title: "Death on two Legs: London during the 1636 outbreak"
+author: Hernán Adasme
+date: 2023-06-07
+format: 
+  html:
+    html:
+    df-print: paged
+    code-fold: true
+    embed-resources: true
+    code-overflow: wrap
+    toc: true
+    number-sections: true
+    css: styles.css
+execute:
+  enabled: True
+  warning: False
+  echo: True
+reference-location: margin
+fig-cap-location: bottom
+---
+
+```{r}
+#this code invoke the same packages in your open Rmarkdown file (which is this file that you are reading now)
+#to plot and visualize your data
+library(sf)
+library(sp)
+library(ggplot2)
+library(dplyr)
+library(leaflet)
+library(plotly)
+library(sfheaders)
+library(survival)
+library(survminer)
+```
+
+```{r}
+childbed<- read.csv('/Users/hernanadasme/Projects/bom/childbed_totals.csv')
+grouped_data <- read.csv('/Users/hernanadasme/Projects/bom/grouped_data.csv')
+```
+
+```{r}
+parishes_1671 <- st_read("//Users/hernanadasme/Projects/bom/parish-shapefiles/WithinTheBills1671/WithinTheBills1671.shp")
+```
+
+```{r}
+grouped_data$total <- rowSums(grouped_data[, c("X1665", "X1666", "X1667", "X1668", "X1669")])
+childbed$total <- rowSums(childbed[, c("X1665", "X1666", "X1667", "X1668", "X1669")])
+```
+
+```{r}
+grouped_1671 <- left_join(parishes_1671, grouped_data, by = "OMEKA_PAR")
+childbed_1671 <- left_join(parishes_1671, childbed, by = "OMEKA_PAR")
+```
+
+```{r}
+map_grouped_1671 <- as.data.frame(grouped_1671)
+```
+
+```{r}
+map_childbed_1671 <- as.data.frame(childbed_1671)
+```
+
+```{r}
+map_grouped_1671
+```
+
+```{r}
+map_childbed_1671
+```
+
+Mapping
+
+```{r}
+centroids <- st_centroid(grouped_1671$geometry)
+
+# Add centroids to the data frame
+grouped_1671$centroid_x <- st_coordinates(centroids)[, "X"]
+grouped_1671$centroid_y <- st_coordinates(centroids)[, "Y"]
+
+plot_av_all <- ggplot(data = grouped_1671 , aes(fill = total_deaths)) +
+  geom_sf(lwd = 0.07, color = "black") +
+  geom_text(aes(x = centroid_x, y = centroid_y, label = OMEKA_PAR),
+            color = "black", size = 1, show.legend = FALSE, alpha=0)+
+  scale_fill_gradient(low = "aliceblue", high = "deepskyblue4", na.value = "white",
+                      breaks = c(0, 30, 60, 90, 120, 150),
+                      labels = scales::comma_format()) +
+  theme_void()
+
+# Convert ggplot to plotly
+plotly_map_all <- ggplotly(plot_av_all)
+
+# Save the plot with high quality
+ggsave("grouped_data_blue_black.png", width = 6, height = 4, dpi = 3200)
+
+# Display the interactive plot
+plotly_map_all
+```
+
+```{r}
+centroids <- st_centroid(childbed_1671$geometry)
+
+# Add centroids to the data frame
+childbed_1671$centroid_x <- st_coordinates(centroids)[, "X"]
+childbed_1671$centroid_y <- st_coordinates(centroids)[, "Y"]
+
+plot_av_all <- ggplot(data = childbed_1671 , aes(fill = total_deaths)) +
+  geom_sf(lwd = 0.07, color = "black") +
+  geom_text(aes(x = centroid_x, y = centroid_y, label = OMEKA_PAR),
+            color = "black", size = 1, show.legend = FALSE, alpha=0)+
+  scale_fill_gradient(low = "aliceblue", high = "deepskyblue4", na.value = "white",
+                      breaks = c(0, 5, 10, 15, 20, 25),
+                      labels = scales::comma_format()) +
+  theme_void()
+
+# Convert ggplot to plotly
+plotly_map_all <- ggplotly(plot_av_all)
+
+# Save the plot with high quality
+ggsave("childbed_blue_black.png", width = 6, height = 4, dpi = 3200)
+
+# Display the interactive plot
+plotly_map_all
+```

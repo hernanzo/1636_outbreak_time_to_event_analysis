@@ -1,0 +1,190 @@
+---
+title: "Death on two Legs: London during the 1636 outbreak"
+author: Hernán Adasme
+date: 2023-06-07
+format: 
+  html:
+    html:
+    df-print: paged
+    code-fold: true
+    embed-resources: true
+    code-overflow: wrap
+    toc: true
+    number-sections: true
+    css: styles.css
+execute:
+  enabled: True
+  warning: False
+  echo: True
+reference-location: margin
+fig-cap-location: bottom
+---
+
+**Loading Data**
+
+```{r}
+#this code invoke the same packages in your open Rmarkdown file (which is this file that you are reading now)
+#to plot and visualize your data
+library(sf)
+library(sp)
+library(ggplot2)
+library(dplyr)
+library(leaflet)
+library(plotly)
+library(sfheaders)
+library(survival)
+library(survminer)
+```
+
+```{r}
+childbed<- read.csv('/Users/hernanadasme/Projects/bom/childbed_totals.csv')
+grouped_data <- read.csv('/Users/hernanadasme/Projects/bom/grouped_data.csv')
+```
+
+```{r}
+grouped_data
+```
+
+```{r}
+# Create a new column that sums up values from column1, column2, and column3
+pre_natal$total <- rowSums(pre_natal[, c("X1665", "X1666", "X1667", "X1668", "X1669")])
+```
+
+```{r}
+first_year$total <- rowSums(first_year[, c("X1665", "X1666", "X1667", "X1668", "X1669")])
+first_month$total <- rowSums(first_month[, c("X1665", "X1666", "X1667", "X1668", "X1669")])
+```
+
+```{r}
+parishes_1671 <- st_read("//Users/hernanadasme/Projects/bom/parish-shapefiles/WithinTheBills1671/WithinTheBills1671.shp")
+```
+
+```{r}
+parishes_1622 <- st_read("/Users/hernanadasme/Projects/bom/BOM_1636/parish-shapefiles/WithinTheBills1622/WithinTheBills1622.shp")
+leftjoined_first_year_1622 <- left_join(parishes_1622, first_year, by = "OMEKA_PAR")
+```
+
+```{r}
+leftjoined_prenatal <- left_join(parishes_1671, pre_natal, by = "OMEKA_PAR")
+map_leftjoined_prenatal <- as.data.frame(leftjoined_prenatal)
+map_leftjoined_prenatal
+```
+
+```{r}
+leftjoined_first_year <- left_join(parishes_1671, first_year, by = "OMEKA_PAR")
+map_leftjoined_first_year <- as.data.frame(leftjoined_first_year)
+map_leftjoined_first_year
+```
+
+```{r}
+leftjoined_first_month <- left_join(parishes_1671, first_month, by = "OMEKA_PAR")
+map_leftjoined_first_month <- as.data.frame(leftjoined_first_year)
+map_leftjoined_first_month
+```
+
+**Mapping**
+
+```{r}
+centroids <- st_centroid(leftjoined_first_year$geometry)
+
+# Add centroids to the data frame
+leftjoined_first_year$centroid_x <- st_coordinates(centroids)[, "X"]
+leftjoined_first_year$centroid_y <- st_coordinates(centroids)[, "Y"]
+
+plot_av_all <- ggplot(data = leftjoined_first_year , aes(fill = total )) +
+  geom_sf(lwd = 0.1, color = "lightgrey") +
+  geom_text(aes(x = centroid_x, y = centroid_y, label = OMEKA_PAR),
+            color = "grey", size = 1, show.legend = FALSE, alpha=0)+
+  scale_fill_gradient(low = "antiquewhite1", high = "red", na.value = "white",
+                      breaks = c(0, 20, 40, 60, 80, 100, 120, 140),
+                      labels = scales::comma_format()) +
+  theme_void()
+
+# Convert ggplot to plotly
+plotly_map_all <- ggplotly(plot_av_all)
+
+# Save the plot with high quality
+ggsave("first_year.png", width = 6, height = 4, dpi = 300)
+
+# Display the interactive plot
+plotly_map_all
+```
+
+```{r}
+centroids <- st_centroid(leftjoined_first_year_1622$geometry)
+
+# Add centroids to the data frame
+leftjoined_first_year_1622$centroid_x <- st_coordinates(centroids)[, "X"]
+leftjoined_first_year_1622$centroid_y <- st_coordinates(centroids)[, "Y"]
+
+plot_av_all_2 <- ggplot(data = leftjoined_first_year_1622 , aes(fill = total )) +
+  geom_sf(lwd = 0.1, color = "lightgrey") +
+  geom_text(aes(x = centroid_x, y = centroid_y, label = OMEKA_PAR),
+            color = "grey", size = 1, show.legend = FALSE, alpha=0)+
+  scale_fill_gradient(low = "antiquewhite1", high = "red", na.value = "white",
+                      breaks = c(0, 20, 40, 60, 80, 100, 120, 140),
+                      labels = scales::comma_format()) +
+  theme_void()
+
+# Convert ggplot to plotly
+plotly_map_all_2 <- ggplotly(plot_av_all_2)
+
+# Display the interactive plot
+plotly_map_all_2
+```
+
+```{r}
+centroids <- st_centroid(leftjoined_prenatal$geometry)
+
+# Add centroids to the data frame
+leftjoined_prenatal$centroid_x <- st_coordinates(centroids)[, "X"]
+leftjoined_prenatal$centroid_y <- st_coordinates(centroids)[, "Y"]
+
+plot_av_all <- ggplot(data = leftjoined_prenatal , aes(fill = total)) +
+  geom_sf(lwd = 0.1, color = "lightgrey") +
+  geom_text(aes(x = centroid_x, y = centroid_y, label = OMEKA_PAR),
+            color = "grey", size = 1, show.legend = FALSE, alpha=0)+
+  scale_fill_gradient(low = "antiquewhite1", high = "red", na.value = "white",
+                      breaks = c(0, 1, 5, 10, 15),
+                      labels = scales::comma_format()) +
+  theme_void()
+
+# Convert ggplot to plotly
+plotly_map_all <- ggplotly(plot_av_all)
+
+# Save the plot with high quality
+ggsave("prenatal.png", width = 6, height = 4, dpi = 300)
+
+# Display the interactive plot
+plotly_map_all
+```
+
+```{r}
+centroids <- st_centroid(leftjoined_first_month$geometry)
+
+# Add centroids to the data frame
+leftjoined_first_month$centroid_x <- st_coordinates(centroids)[, "X"]
+leftjoined_first_month$centroid_y <- st_coordinates(centroids)[, "Y"]
+
+plot_av_all <- ggplot(data = leftjoined_first_month , aes(fill = total )) +
+  geom_sf(lwd = 0.1, color = "lightgrey") +
+  geom_text(aes(x = centroid_x, y = centroid_y, label = OMEKA_PAR),
+            color = "grey", size = 1, show.legend = FALSE, alpha=0)+
+  scale_fill_gradient(low = "antiquewhite1", high = "red", na.value = "white",
+                      breaks = c(0, 20, 40, 60, 80, 100, 120),
+                      labels = scales::comma_format()) +
+  theme_void()
+
+# Convert ggplot to plotly
+plotly_map_all <- ggplotly(plot_av_all)
+
+# Save the plot with high quality
+ggsave("firstmonth.png.png", width = 6, height = 4, dpi = 300)
+
+# Display the interactive plot
+plotly_map_all
+```
+
+```{r}
+getwd()
+```
